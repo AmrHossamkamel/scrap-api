@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Management - إدارة قاعدة البيانات</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .query-editor {
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            min-height: 200px;
+            resize: vertical;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .query-editor:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .query-examples {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .example-query {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .example-query:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        
+        .response-viewer {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .json-key {
+            color: #f093fb;
+        }
+        
+        .json-string {
+            color: #4facfe;
+        }
+        
+        .json-number {
+            color: #f5af19;
+        }
+        
+        .json-boolean {
+            color: #ff416c;
+        }
+        
+        .tab-container {
+            display: flex;
+            margin-bottom: 2rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 0.5rem;
+        }
+        
+        .tab-button {
+            flex: 1;
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .nav-menu {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+        
+        .nav-button {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 0.75rem 1.5rem;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-block;
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-menu">
+        <a href="/" class="nav-button">🏠 الصفحة الرئيسية</a>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">🗄️</div>
+                <h1>Database Management</h1>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot" id="dbStatusDot"></div>
+                <span id="dbStatusText">غير متصل</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Database Configuration -->
+            <section class="control-panel">
+                <div class="panel-header">
+                    <h2>🔧 إعداد قاعدة البيانات</h2>
+                    <p>ربط مشروعك بقاعدة بيانات Hasura</p>
+                </div>
+
+                <div class="form-container">
+                    <form id="dbConfigForm" class="scrape-form">
+                        <div class="input-group">
+                            <label for="endpoint">🌐 Hasura GraphQL Endpoint</label>
+                            <input 
+                                type="url" 
+                                id="endpoint" 
+                                name="endpoint" 
+                                placeholder="https://your-project.hasura.app/v1/graphql"
+                                required
+                            >
+                            <span class="input-hint">رابط GraphQL الخاص بمشروع Hasura</span>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="secretKey">🔐 Admin Secret Key</label>
+                            <input 
+                                type="password" 
+                                id="secretKey" 
+                                name="secretKey" 
+                                placeholder="your-admin-secret-key"
+                                required
+                            >
+                            <span class="input-hint">المفتاح السري للوصول لقاعدة البيانات</span>
+                        </div>
+
+                        <button type="submit" class="submit-btn" id="connectBtn">
+                            <span class="btn-icon">🔗</span>
+                            <span class="btn-text">اختبار الاتصال</span>
+                            <div class="btn-loader"></div>
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Query Interface -->
+            <section class="control-panel" id="queryInterface" style="display: none;">
+                <div class="panel-header">
+                    <h2>💻 واجهة الاستعلامات</h2>
+                    <p>تنفيذ استعلامات GraphQL على قاعدة البيانات</p>
+                </div>
+
+                <div class="tab-container">
+                    <button class="tab-button active" onclick="switchTab('query')">📝 كتابة Query</button>
+                    <button class="tab-button" onclick="switchTab('examples')">📚 أمثلة</button>
+                    <button class="tab-button" onclick="switchTab('schema')">🔍 Schema</button>
+                </div>
+
+                <!-- Query Tab -->
+                <div id="queryTab" class="tab-content active">
+                    <div class="form-container">
+                        <!-- Saved Queries Section -->
+                        <div class="query-examples" style="margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>💾 Queries المحفوظة</h3>
+                                <div>
+                                    <button type="button" class="action-btn" id="saveQueryBtn" style="margin-left: 0.5rem;">
+                                        💾 حفظ Query الحالي
+                                    </button>
+                                    <button type="button" class="action-btn" id="clearSavedBtn">
+                                        🗑️ مسح جميع المحفوظات
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="savedQueriesList">
+                                <p style="color: rgba(255,255,255,0.6); font-style: italic;">لا توجد queries محفوظة</p>
+                            </div>
+                        </div>
+
+                        <form id="queryForm" class="scrape-form">
+                            <div class="input-group">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="graphqlQuery">GraphQL Query</label>
+                                    <input 
+                                        type="text" 
+                                        id="queryName" 
+                                        placeholder="اسم القيري (اختياري)" 
+                                        style="width: 200px; padding: 0.5rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; font-size: 12px;"
+                                    >
+                                </div>
+                                <textarea 
+                                    id="graphqlQuery" 
+                                    name="graphqlQuery" 
+                                    class="query-editor"
+                                    placeholder="اكتب GraphQL query هنا...
+
+مثال:
+query {
+  users {
+    id
+    name
+    email
+  }
+}"
+                                    required
+                                ></textarea>
+                            </div>
+
+                            <div class="input-group">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="variables">Variables (JSON - اختياري)</label>
+                                    <button type="button" class="action-btn" id="autoFillVariablesBtn" style="font-size: 11px; padding: 0.5rem;">
+                                        🔄 ملء تلقائي من البيانات
+                                    </button>
+                                </div>
+                                <textarea 
+                                    id="variables" 
+                                    name="variables" 
+                                    class="query-editor"
+                                    style="min-height: 100px;"
+                                    placeholder='{
+  "content": "",
+  "source_url": "",
+  "title": ""
+}'
+                                ></textarea>
+                                <div style="margin-top: 0.5rem; padding: 0.75rem; background: rgba(102, 126, 234, 0.1); border-radius: 8px; border: 1px solid rgba(102, 126, 234, 0.3);">
+                                    <p style="margin: 0; font-size: 12px; color: rgba(255,255,255,0.8);">
+                                        💡 <strong>ملاحظة:</strong> عند الإرسال المجمع، سيتم ملء Variables الموجودة هنا فقط بناءً على البيانات المستخرجة. 
+                                        أضف أسماء المفاتيح التي تريد استخدامها من JSON كـ Variables فارغة مثل {"field_name": ""}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="submit-btn" id="executeBtn">
+                                <span class="btn-icon">▶️</span>
+                                <span class="btn-text">تنفيذ Query</span>
+                                <div class="btn-loader"></div>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Examples Tab -->
+                <div id="examplesTab" class="tab-content">
+                    <div class="query-examples">
+                        <h3>أمثلة Query شائعة:</h3>
+                        
+                        <div class="example-query" onclick="useExample(this)">
+                            <h4>📋 جلب جميع البيانات</h4>
+                            <pre>query {
+  users {
+    id
+    name
+    email
+    created_at
+  }
+}</pre>
+                        </div>
+
+                        <div class="example-query" onclick="useExample(this)">
+                            <h4>🔍 البحث مع شروط</h4>
+                            <pre>query GetUserByEmail($email: String!) {
+  users(where: {email: {_eq: $email}}) {
+    id
+    name
+    email
+  }
+}</pre>
+                        </div>
+
+                        <div class="example-query" onclick="useExample(this)">
+                            <h4>➕ إضافة بيانات جديدة</h4>
+                            <pre>mutation InsertUser($name: String!, $email: String!) {
+  insert_users_one(object: {name: $name, email: $email}) {
+    id
+    name
+    email
+  }
+}</pre>
+                        </div>
+
+                        <div class="example-query" onclick="useExample(this)">
+                            <h4>✏️ تحديث البيانات</h4>
+                            <pre>mutation UpdateUser($id: Int!, $name: String!) {
+  update_users_by_pk(pk_columns: {id: $id}, _set: {name: $name}) {
+    id
+    name
+    email
+  }
+}</pre>
+                        </div>
+
+                        <div class="example-query" onclick="useExample(this)">
+                            <h4>🗑️ حذف البيانات</h4>
+                            <pre>mutation DeleteUser($id: Int!) {
+  delete_users_by_pk(id: $id) {
+    id
+    name
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schema Tab -->
+                <div id="schemaTab" class="tab-content">
+                    <div class="query-examples">
+                        <h3>📊 Schema المتاح:</h3>
+                        <div id="schemaContent">
+                            <p>سيتم عرض Schema هنا بعد الاتصال بقاعدة البيانات...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Query Results -->
+            <section class="results-section" id="queryResults" style="display: none;">
+                <div class="results-header">
+                    <h3>📊 نتائج الاستعلام</h3>
+                    <div class="results-actions">
+                        <button class="action-btn" id="downloadResultsBtn">
+                            📥 تحميل النتائج
+                        </button>
+                        <button class="action-btn" id="clearResultsBtn">
+                            🗑️ مسح النتائج
+                        </button>
+                    </div>
+                </div>
+                <div class="response-viewer" id="responseViewer">
+                    <!-- Results will be displayed here -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>© 2025 Database Management - Made by Eng: Amr Hossam</p>
+        </footer>
+    </div>
+
+    <!-- Notification System -->
+    <div class="notification-container" id="notificationContainer"></div>
+
+    <script src="/static/database.js"></script>
+</body>
+</html>
