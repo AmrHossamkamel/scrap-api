@@ -20,6 +20,8 @@ Preferred communication style: Simple, everyday language.
 - User requested live streaming of scraping results instead of waiting for completion
 - User feedback: Keep same deduplication system but show pages as they complete
 - Maintained existing duplicate prevention while adding real-time display
+- Enhanced content extraction using trafilatura library for better WordPress and modern website support
+- Improved extraction for sites with dynamic content loading and Elementor-based layouts
 
 ## System Architecture
 

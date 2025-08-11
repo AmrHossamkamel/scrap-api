@@ -13,6 +13,7 @@ import uvicorn
 import os
 import json
 import asyncio
+import trafilatura
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -105,8 +106,45 @@ class WebScraper:
         return links
     
     def extract_content(self, html_content: str, url: str) -> Dict[str, Any]:
-        """Extract title and content from HTML"""
+        """Extract title and content from HTML using advanced extraction methods"""
         try:
+            # First, try using trafilatura for better content extraction
+            extracted_content = trafilatura.extract(html_content, include_comments=False, include_tables=True)
+            extracted_title = trafilatura.extract_metadata(html_content)
+            
+            # Use trafilatura results if available
+            if extracted_content and len(extracted_content.strip()) > 50:
+                title = ""
+                if extracted_title and extracted_title.title:
+                    title = extracted_title.title.strip()
+                
+                # If no title from trafilatura, try BeautifulSoup
+                if not title:
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    title_tag = soup.find('title')
+                    if title_tag:
+                        title = title_tag.get_text().strip()
+                    else:
+                        h1_tag = soup.find('h1')
+                        if h1_tag:
+                            title = h1_tag.get_text().strip()
+                
+                # Clean up content
+                content = ' '.join(extracted_content.split())
+                
+                # Generate unique ID and timestamp
+                page_id = str(uuid.uuid4())
+                created_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                
+                return {
+                    "created_at": created_at,
+                    "id": page_id,
+                    "source_url": url,
+                    "title": title,
+                    "content": content
+                }
+            
+            # Fallback to BeautifulSoup method if trafilatura doesn't work well
             soup = BeautifulSoup(html_content, 'html.parser')
             
             # Extract title
@@ -123,29 +161,35 @@ class WebScraper:
             for script in soup(["script", "style", "nav", "header", "footer", "aside"]):
                 script.decompose()
             
-            # Extract main content
+            # Extract main content with better selectors for WordPress and modern sites
             content = ""
             
-            # Try to find main content areas
-            main_content = soup.find('main') or soup.find('article')
-            if not main_content:
-                # Look for divs with content-related class names
-                content_divs = soup.find_all('div', class_=True)
-                for div in content_divs:
-                    class_names = div.get('class', [])
-                    if isinstance(class_names, list):
-                        class_str = ' '.join(class_names).lower()
-                    else:
-                        class_str = str(class_names).lower()
-                    
-                    if any(word in class_str for word in ['content', 'article', 'post', 'body']):
-                        main_content = div
-                        break
+            # Try multiple content selectors for better extraction
+            content_selectors = [
+                'main', 'article', '.post-content', '.entry-content', '.content',
+                '.elementor-widget-container', '.elementor-text-editor',
+                '.post-body', '.article-content', '.page-content',
+                '[role="main"]', '.main-content', '#content'
+            ]
             
-            if main_content:
-                content = main_content.get_text(separator=' ', strip=True)
-            else:
-                # Fallback to body content
+            main_content = None
+            for selector in content_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    # Find the element with the most text content
+                    best_element = max(elements, key=lambda x: len(x.get_text()))
+                    if len(best_element.get_text().strip()) > len(content):
+                        main_content = best_element
+                        content = best_element.get_text(separator=' ', strip=True)
+            
+            # If still no good content, try paragraph-based extraction
+            if len(content.strip()) < 100:
+                paragraphs = soup.find_all('p')
+                if paragraphs:
+                    content = ' '.join([p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
+            
+            # Final fallback to body content
+            if len(content.strip()) < 50:
                 body = soup.find('body')
                 if body:
                     content = body.get_text(separator=' ', strip=True)
