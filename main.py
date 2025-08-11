@@ -95,8 +95,8 @@ class WebScraper:
                 # Convert relative URLs to absolute
                 absolute_url = urljoin(base_url, href)
                 
-                # Check if it's the same domain
-                if self.is_same_domain(absolute_url):
+                # Check if it's the same domain and not duplicate
+                if self.is_same_domain(absolute_url) and not self.is_duplicate_url(absolute_url):
                     normalized_url = self.normalize_url(absolute_url)
                     links.add(normalized_url)
         
@@ -104,6 +104,46 @@ class WebScraper:
             logger.error(f"Error extracting links: {e}")
         
         return links
+    
+    def normalize_url_for_deduplication(self, url: str) -> str:
+        """Enhanced URL normalization for better duplicate detection"""
+        try:
+            parsed = urlparse(url.lower().strip())
+            
+            # Remove common tracking parameters
+            query_params = parse_qs(parsed.query)
+            filtered_params = {}
+            
+            # Keep only meaningful parameters, filter out tracking
+            tracking_params = {'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 
+                             'fbclid', 'gclid', 'ref', 'source', '_ga', '_gl', 'mc_cid', 'mc_eid',
+                             'campaign', 'medium', 'content', 'term', 'msclkid', 'wbraid', 'gbraid'}
+            
+            for key, value in query_params.items():
+                if key.lower() not in tracking_params:
+                    filtered_params[key] = value
+            
+            # Rebuild URL without tracking parameters
+            filtered_query = urlencode(filtered_params, doseq=True)
+            normalized_url = urlunparse((
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path.rstrip('/'),  # Remove trailing slash
+                parsed.params,
+                filtered_query,
+                ''  # Remove fragment
+            ))
+            
+            return normalized_url
+            
+        except Exception as e:
+            logger.error(f"Error normalizing URL for deduplication {url}: {e}")
+            return url.lower().strip()
+    
+    def is_duplicate_url(self, url: str) -> bool:
+        """Check if URL is duplicate using enhanced normalization"""
+        normalized = self.normalize_url_for_deduplication(url)
+        return normalized in self.visited_urls
     
     def extract_content(self, html_content: str, url: str) -> Dict[str, Any]:
         """Extract title and content from HTML using advanced extraction methods"""
@@ -813,7 +853,7 @@ async def scrape_stream_unlimited(url: str, timeout: int = 10):
             yield f"data: {json.dumps(start_event, ensure_ascii=False)}\n\n"
             
             # Initialize scraper without page limit
-            scraper = WebScraper(url, timeout=timeout, max_pages=float('inf'))
+            scraper = WebScraper(url, timeout=timeout, max_pages=999999)
             
             # Store streamed results
             streamed_results = []
@@ -824,12 +864,13 @@ async def scrape_stream_unlimited(url: str, timeout: int = 10):
             while urls_to_visit:
                 current_url = urls_to_visit.pop(0)
                 
-                # Skip if already visited
-                if current_url in scraper.visited_urls:
+                # Skip if already visited (with enhanced duplicate detection)
+                normalized_for_check = scraper.normalize_url_for_deduplication(current_url)
+                if normalized_for_check in scraper.visited_urls:
                     continue
                 
-                # Mark as visited
-                scraper.visited_urls.add(current_url)
+                # Mark as visited (using enhanced normalization)
+                scraper.visited_urls.add(normalized_for_check)
                 
                 # Scrape the page
                 page_data = scraper.scrape_page(current_url)
@@ -867,15 +908,15 @@ async def scrape_stream_unlimited(url: str, timeout: int = 10):
                 # Small delay to prevent overwhelming the client
                 await asyncio.sleep(0.2)
                 
-                # Safety check - prevent infinite loops (max 10000 pages)
-                if scraped_count >= 10000:
-                    safety_event = {
-                        "type": "warning",
-                        "message": "تم الوصول للحد الأقصى من الأمان (10000 صفحة). توقف السكرابنج.",
+                # Enhanced URL validation to prevent duplicates and improve efficiency
+                if scraped_count > 0 and scraped_count % 1000 == 0:
+                    progress_event = {
+                        "type": "progress",
+                        "message": f"تم استخراج {scraped_count} صفحة... استمرار العمل",
+                        "current": scraped_count,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
-                    yield f"data: {json.dumps(safety_event, ensure_ascii=False)}\n\n"
-                    break
+                    yield f"data: {json.dumps(progress_event, ensure_ascii=False)}\n\n"
             
             # Send completion event
             complete_event = {

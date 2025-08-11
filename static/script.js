@@ -230,7 +230,7 @@ class WebScrapingUI {
         const timeout = parseInt(formData.get('timeout'));
         
         if (selectedMode === 'unlimited') {
-            const confirmed = confirm('⚠️ Warning: You are about to scrape ALL pages from the website with no limit.\nThis may take a very long time and consume significant resources.\nDo you want to continue?');
+            const confirmed = confirm('⚠️ تحذير: ستقوم باستخراج جميع صفحات الموقع بدون حد أقصى.\nقد يستغرق هذا وقتاً طويلاً جداً ويستهلك موارد كثيرة.\nهل تريد المتابعة؟');
             if (!confirmed) {
                 return;
             }
@@ -730,6 +730,12 @@ class WebScrapingUI {
                             
                         case 'warning':
                             this.showNotification(data.message, 'warning');
+                            break;
+                            
+                        case 'progress':
+                            // Update progress for milestone notifications
+                            const currentCount = data.current || this.results.length;
+                            this.updateProgress(null, data.message);
                             break;
                             
                         case 'complete':

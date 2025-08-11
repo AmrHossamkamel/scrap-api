@@ -24,7 +24,9 @@ Preferred communication style: Simple, everyday language.
 - Improved extraction for sites with dynamic content loading and Elementor-based layouts
 - Added unlimited streaming endpoint (/scrape-stream-unlimited) for comprehensive website crawling
 - User requested: Create unlimited streaming endpoint that continues until all website pages are scraped
-- Added safety limit of 10,000 pages to prevent infinite loops in unlimited mode
+- Removed safety limit per user request, added enhanced URL deduplication instead
+- Enhanced URL normalization to filter tracking parameters and prevent duplicate scraping
+- User feedback: Remove limits for unlimited streaming, focus on better duplicate detection
 
 ## System Architecture
 
