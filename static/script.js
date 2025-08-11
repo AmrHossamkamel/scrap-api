@@ -313,6 +313,10 @@ class WebScrapingUI {
                 // Real-time streaming scraping with same duplicate prevention
                 await this.startStreamingScraping(url, maxPages, timeout);
                 return; // Exit early as streaming handles everything
+            } else if (mode === 'unlimited') {
+                // Unlimited streaming scraping
+                await this.startUnlimitedStreamingScraping(url, timeout);
+                return; // Exit early as streaming handles everything
             } else {
                 // Limited scraping
                 this.simulateProgress(maxPages);
@@ -658,6 +662,108 @@ class WebScrapingUI {
     hideResults() {
         const resultsSection = document.getElementById('resultsSection');
         resultsSection.style.display = 'none';
+    }
+    
+    async startUnlimitedStreamingScraping(url, timeout) {
+        const submitBtn = document.getElementById('submitBtn');
+        const progressSection = document.getElementById('progressSection');
+        const resultsSection = document.getElementById('resultsSection');
+        
+        try {
+            // Update UI to loading state
+            submitBtn.classList.add('loading');
+            this.showProgress();
+            this.hideResults();
+            
+            // Clear previous results
+            this.results = [];
+            
+            // Show progress section
+            progressSection.style.display = 'block';
+            progressSection.scrollIntoView({ behavior: 'smooth' });
+            
+            // Prepare unlimited streaming URL
+            const streamUrl = `${this.apiBaseUrl}/scrape-stream-unlimited?url=${encodeURIComponent(url)}&timeout=${timeout}`;
+            
+            // Close any existing EventSource
+            if (this.eventSource) {
+                this.eventSource.close();
+            }
+            
+            // Create new EventSource for unlimited streaming
+            this.eventSource = new EventSource(streamUrl);
+            
+            // Set up proper event listeners
+            this.eventSource.addEventListener('error', (error) => {
+                console.error('Unlimited EventSource failed:', error);
+                this.eventSource.close();
+                this.showNotification('خطأ في الاتصال بالبث المباشر الشامل', 'error');
+                submitBtn.classList.remove('loading');
+            });
+            
+            // Handle unlimited streaming events
+            this.eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch (data.type) {
+                        case 'start':
+                            this.updateProgress(0, data.message);
+                            this.showNotification('بدء البث المباشر الشامل للموقع', 'info');
+                            break;
+                            
+                        case 'page':
+                            // Add new page to results immediately
+                            this.results.push({ data: data.data });
+                            
+                            // Update progress for unlimited mode
+                            const current = data.progress ? data.progress.current : this.results.length;
+                            const queueSize = data.progress ? data.progress.queue_size : 0;
+                            
+                            this.updateProgress(null, `تم استخراج ${current} صفحة... (${queueSize} في الانتظار)`);
+                            
+                            // Update results display in real-time
+                            this.showResults();
+                            this.displayStreamingResults();
+                            
+                            break;
+                            
+                        case 'warning':
+                            this.showNotification(data.message, 'warning');
+                            break;
+                            
+                        case 'complete':
+                            this.eventSource.close();
+                            this.updateProgress(100, data.message);
+                            this.showNotification(`تم الانتهاء من السكرابنج الشامل! تم استخراج ${data.total_pages} صفحة`, 'success');
+                            
+                            // Final results display
+                            this.showResults();
+                            this.displayResults(this.results);
+                            
+                            break;
+                            
+                        case 'error':
+                            this.eventSource.close();
+                            throw new Error(data.message);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing unlimited stream data:', parseError);
+                }
+            };
+            
+            this.eventSource.onerror = (error) => {
+                console.error('Unlimited EventSource error:', error);
+                this.eventSource.close();
+                this.showNotification('خطأ في البث المباشر الشامل', 'error');
+            };
+            
+        } catch (error) {
+            this.showNotification(error.message || 'خطأ في بدء البث المباشر الشامل', 'error');
+            console.error('Unlimited streaming error:', error);
+        } finally {
+            submitBtn.classList.remove('loading');
+        }
     }
     
     downloadResults() {

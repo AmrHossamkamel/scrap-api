@@ -765,6 +765,149 @@ async def scrape_website_stream(
         }
     )
 
+@app.get("/scrape-stream-unlimited")
+async def scrape_stream_unlimited(url: str, timeout: int = 10):
+    """
+    Real-time streaming scraping endpoint without page limit - scrapes entire website
+    
+    This endpoint continues scraping until all discoverable pages on the website are processed.
+    Results are streamed in real-time using Server-Sent Events (SSE).
+    
+    ## Parameters:
+    - `url`: The starting URL to scrape from
+    - `timeout`: Request timeout in seconds (default: 10)
+    
+    ## Returns:
+    Server-Sent Events stream with each event containing:
+    - `data`: Scraped page information (title, content, URL, timestamp)
+    - `event`: Type of event (page, progress, complete, error)
+    
+    ## Usage:
+    Perfect for comprehensive website crawling where you need all available content.
+    Use with EventSource in JavaScript for real-time updates.
+    """
+    
+    # Validate URL
+    try:
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            raise HTTPException(status_code=400, detail="Invalid URL format")
+        
+        if parsed_url.scheme not in ['http', 'https']:
+            raise HTTPException(status_code=400, detail="URL must use HTTP or HTTPS protocol")
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid URL: {str(e)}")
+    
+    async def generate_unlimited_stream() -> Generator[str, None, None]:
+        """Generate SSE stream for unlimited real-time scraping results"""
+        scraped_count = 0
+        
+        try:
+            # Send start event
+            start_event = {
+                "type": "start",
+                "message": "بدء عملية السكرابنج الشامل للموقع...",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            yield f"data: {json.dumps(start_event, ensure_ascii=False)}\n\n"
+            
+            # Initialize scraper without page limit
+            scraper = WebScraper(url, timeout=timeout, max_pages=float('inf'))
+            
+            # Store streamed results
+            streamed_results = []
+            
+            # Start crawling and stream results
+            urls_to_visit = [scraper.normalize_url(scraper.base_url)]
+            
+            while urls_to_visit:
+                current_url = urls_to_visit.pop(0)
+                
+                # Skip if already visited
+                if current_url in scraper.visited_urls:
+                    continue
+                
+                # Mark as visited
+                scraper.visited_urls.add(current_url)
+                
+                # Scrape the page
+                page_data = scraper.scrape_page(current_url)
+                if page_data:
+                    scraped_count += 1
+                    streamed_results.append(page_data)
+                    
+                    # Stream the result immediately
+                    event_data = {
+                        "type": "page",
+                        "data": page_data,
+                        "progress": {
+                            "current": scraped_count,
+                            "total": "غير محدود",
+                            "percentage": None,
+                            "queue_size": len(urls_to_visit)
+                        }
+                    }
+                    yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                    
+                    # Extract links for next pages
+                    try:
+                        response = scraper.session.get(current_url, timeout=timeout)
+                        if response.status_code == 200 and 'text/html' in response.headers.get('content-type', '').lower():
+                            new_links = scraper.extract_links(response.text, current_url)
+                            
+                            # Add new links to visit queue
+                            for link in new_links:
+                                if link not in scraper.visited_urls and link not in urls_to_visit:
+                                    urls_to_visit.append(link)
+                    
+                    except Exception as e:
+                        logger.error(f"Error extracting links from {current_url}: {e}")
+                
+                # Small delay to prevent overwhelming the client
+                await asyncio.sleep(0.2)
+                
+                # Safety check - prevent infinite loops (max 10000 pages)
+                if scraped_count >= 10000:
+                    safety_event = {
+                        "type": "warning",
+                        "message": "تم الوصول للحد الأقصى من الأمان (10000 صفحة). توقف السكرابنج.",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    yield f"data: {json.dumps(safety_event, ensure_ascii=False)}\n\n"
+                    break
+            
+            # Send completion event
+            complete_event = {
+                "type": "complete",
+                "message": f"تم الانتهاء من السكرابنج الشامل! تم سكرابنج {scraped_count} صفحة",
+                "total_pages": scraped_count,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            yield f"data: {json.dumps(complete_event, ensure_ascii=False)}\n\n"
+        
+        except Exception as e:
+            logger.error(f"Error during unlimited streaming scrape: {e}")
+            error_event = {
+                "type": "error",
+                "message": f"حدث خطأ: {str(e)}",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        generate_unlimited_stream(),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST",
+            "Access-Control-Allow-Headers": "Content-Type"
+        }
+    )
+
 @app.get("/database")
 async def database_page():
     """Serve the database management UI"""

@@ -22,6 +22,9 @@ Preferred communication style: Simple, everyday language.
 - Maintained existing duplicate prevention while adding real-time display
 - Enhanced content extraction using trafilatura library for better WordPress and modern website support
 - Improved extraction for sites with dynamic content loading and Elementor-based layouts
+- Added unlimited streaming endpoint (/scrape-stream-unlimited) for comprehensive website crawling
+- User requested: Create unlimited streaming endpoint that continues until all website pages are scraped
+- Added safety limit of 10,000 pages to prevent infinite loops in unlimited mode
 
 ## System Architecture
 
