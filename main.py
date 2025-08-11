@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from typing import List, Dict, Any, Set
+from fastapi.responses import FileResponse, StreamingResponse
+from typing import List, Dict, Any, Set, Generator
 import requests
 from bs4 import BeautifulSoup
 import uuid
@@ -11,6 +11,8 @@ import logging
 from pydantic import BaseModel
 import uvicorn
 import os
+import json
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,12 +33,13 @@ class ScrapedPage(BaseModel):
     data: Dict[str, Any]
 
 class WebScraper:
-    def __init__(self, base_url: str, timeout: int = 10, max_pages: int = 100):
+    def __init__(self, base_url: str, timeout: int = 10, max_pages: int = 100, callback=None):
         self.base_url = base_url
         self.timeout = timeout
         self.max_pages = max_pages
         self.visited_urls: Set[str] = set()
         self.session = requests.Session()
+        self.callback = callback  # Callback function for streaming results
         
         # Set user agent to avoid blocking
         self.session.headers.update({
@@ -233,6 +236,10 @@ class WebScraper:
             page_data = self.scrape_page(current_url)
             if page_data:
                 scraped_data.append(page_data)
+                
+                # Call callback if streaming is enabled
+                if self.callback:
+                    self.callback(page_data)
                 
                 # Extract links only if we successfully scraped the page
                 try:
@@ -536,6 +543,183 @@ async def scrape_website(
     except Exception as e:
         logger.error(f"Error during scraping: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.post("/scrape-stream", tags=["Web Scraping"])
+async def scrape_website_stream(
+    url: str = Query(
+        ..., 
+        description="The base URL of the website to scrape",
+        example="https://example.com"
+    ),
+    max_pages: int = Query(
+        50, 
+        description="Maximum number of pages to scrape", 
+        ge=1, 
+        le=999999,
+        example=50
+    ),
+    timeout: int = Query(
+        10, 
+        description="Request timeout in seconds for each page", 
+        ge=1, 
+        le=60,
+        example=10
+    )
+):
+    """
+    **📡 Stream scraped pages in real-time as they are processed**
+    
+    This endpoint streams scraped pages using Server-Sent Events (SSE).
+    Each page is sent immediately after being processed, providing real-time results.
+    
+    ## Features:
+    - 📡 **Real-time Streaming**: Results appear as soon as each page is scraped
+    - 🚀 **No Waiting**: See pages immediately instead of waiting for completion
+    - 📊 **Live Progress**: Track scraping progress in real-time
+    - 🛡️ **Same Safety**: All security features of regular scraping
+    
+    ## Returns:
+    Server-Sent Events stream with each event containing:
+    - `data`: Scraped page information (title, content, URL, timestamp)
+    - `event`: Type of event (page, progress, complete, error)
+    
+    ## Usage:
+    Perfect for interactive applications where users want to see results immediately.
+    Use with EventSource in JavaScript for real-time updates.
+    """
+    
+    # Validate URL
+    try:
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            raise HTTPException(status_code=400, detail="Invalid URL format")
+        
+        if parsed_url.scheme not in ['http', 'https']:
+            raise HTTPException(status_code=400, detail="URL must use HTTP or HTTPS protocol")
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid URL: {str(e)}")
+    
+    async def generate_stream() -> Generator[str, None, None]:
+        """Generate SSE stream for real-time scraping results"""
+        scraped_count = 0
+        
+        def stream_callback(page_data):
+            nonlocal scraped_count
+            scraped_count += 1
+            
+            # Format the page data for streaming
+            event_data = {
+                "type": "page",
+                "data": page_data,
+                "progress": {
+                    "current": scraped_count,
+                    "total": max_pages,
+                    "percentage": min(100, (scraped_count / max_pages) * 100)
+                }
+            }
+            
+            return f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+        
+        try:
+            # Send start event
+            start_event = {
+                "type": "start",
+                "message": "بدء عملية السكرابنج...",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            yield f"data: {json.dumps(start_event, ensure_ascii=False)}\n\n"
+            
+            # Initialize scraper with callback for streaming
+            scraper = WebScraper(url, timeout=timeout, max_pages=max_pages)
+            
+            # Store streamed results
+            streamed_results = []
+            
+            def capture_result(page_data):
+                streamed_results.append(page_data)
+                # Generate stream event
+                return stream_callback(page_data)
+            
+            scraper.callback = capture_result
+            
+            # Start crawling and stream results
+            urls_to_visit = [scraper.normalize_url(scraper.base_url)]
+            
+            while urls_to_visit and len(streamed_results) < max_pages:
+                current_url = urls_to_visit.pop(0)
+                
+                # Skip if already visited
+                if current_url in scraper.visited_urls:
+                    continue
+                
+                # Mark as visited
+                scraper.visited_urls.add(current_url)
+                
+                # Scrape the page
+                page_data = scraper.scrape_page(current_url)
+                if page_data:
+                    streamed_results.append(page_data)
+                    
+                    # Stream the result immediately
+                    event_data = {
+                        "type": "page",
+                        "data": page_data,
+                        "progress": {
+                            "current": len(streamed_results),
+                            "total": max_pages,
+                            "percentage": min(100, (len(streamed_results) / max_pages) * 100)
+                        }
+                    }
+                    yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                    
+                    # Extract links for next pages
+                    try:
+                        response = scraper.session.get(current_url, timeout=timeout)
+                        if response.status_code == 200 and 'text/html' in response.headers.get('content-type', '').lower():
+                            new_links = scraper.extract_links(response.text, current_url)
+                            
+                            # Add new links to visit queue
+                            for link in new_links:
+                                if link not in scraper.visited_urls and link not in urls_to_visit:
+                                    urls_to_visit.append(link)
+                    
+                    except Exception as e:
+                        logger.error(f"Error extracting links from {current_url}: {e}")
+                
+                # Small delay to prevent overwhelming the client
+                await asyncio.sleep(0.1)
+            
+            # Send completion event
+            complete_event = {
+                "type": "complete",
+                "message": f"تم الانتهاء! تم سكرابنج {len(streamed_results)} صفحة",
+                "total_pages": len(streamed_results),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            yield f"data: {json.dumps(complete_event, ensure_ascii=False)}\n\n"
+        
+        except Exception as e:
+            logger.error(f"Error during streaming scrape: {e}")
+            error_event = {
+                "type": "error",
+                "message": f"حدث خطأ: {str(e)}",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST",
+            "Access-Control-Allow-Headers": "Content-Type"
+        }
+    )
 
 @app.get("/database")
 async def database_page():

@@ -4,6 +4,7 @@ class WebScrapingUI {
         this.apiBaseUrl = window.location.origin;
         this.currentRequest = null;
         this.results = [];
+        this.eventSource = null;
         
         this.init();
     }
@@ -187,6 +188,10 @@ class WebScrapingUI {
             maxPagesGroup.style.opacity = '0.5';
             maxPagesInput.disabled = true;
             btnText.textContent = '🎯 استخراج صفحة واحدة';
+        } else if (selectedMode === 'stream') {
+            maxPagesGroup.style.opacity = '1';
+            maxPagesInput.disabled = false;
+            btnText.textContent = '📡 بث مباشر للنتائج';
         } else if (selectedMode === 'unlimited') {
             maxPagesGroup.style.opacity = '0.5';
             maxPagesInput.disabled = true;
@@ -217,6 +222,8 @@ class WebScrapingUI {
             maxPages = 999999;
         } else if (selectedMode === 'single') {
             maxPages = 1; // Will be ignored for single page endpoint
+        } else if (selectedMode === 'stream') {
+            maxPages = parseInt(formData.get('maxPages'));
         } else {
             maxPages = parseInt(formData.get('maxPages'));
         }
@@ -302,6 +309,10 @@ class WebScrapingUI {
                 }
                 
                 data = await response.json();
+            } else if (mode === 'stream') {
+                // Real-time streaming scraping
+                await this.startStreamingScraping(url, maxPages, timeout);
+                return; // Exit early as streaming handles everything
             } else {
                 // Limited scraping
                 this.simulateProgress(maxPages);
@@ -514,6 +525,121 @@ class WebScrapingUI {
                 modal.remove();
             }
         });
+    }
+    
+    async startStreamingScraping(url, maxPages, timeout) {
+        const submitBtn = document.getElementById('submitBtn');
+        const progressSection = document.getElementById('progressSection');
+        const resultsSection = document.getElementById('resultsSection');
+        
+        try {
+            // Update UI to loading state
+            submitBtn.classList.add('loading');
+            this.showProgress();
+            this.hideResults();
+            
+            // Clear previous results
+            this.results = [];
+            
+            // Show progress section
+            progressSection.style.display = 'block';
+            progressSection.scrollIntoView({ behavior: 'smooth' });
+            
+            // Prepare streaming URL
+            const streamUrl = `${this.apiBaseUrl}/scrape-stream?url=${encodeURIComponent(url)}&max_pages=${maxPages}&timeout=${timeout}`;
+            
+            // Close any existing EventSource
+            if (this.eventSource) {
+                this.eventSource.close();
+            }
+            
+            // Create new EventSource for streaming
+            this.eventSource = new EventSource(streamUrl);
+            
+            // Handle streaming events
+            this.eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch (data.type) {
+                        case 'start':
+                            this.updateProgress(0, data.message);
+                            this.showNotification('بدء البث المباشر للنتائج', 'info');
+                            break;
+                            
+                        case 'page':
+                            // Add new page to results immediately
+                            this.results.push({ data: data.data });
+                            
+                            // Update progress
+                            const percentage = data.progress ? data.progress.percentage : 0;
+                            const current = data.progress ? data.progress.current : this.results.length;
+                            const total = data.progress ? data.progress.total : maxPages;
+                            
+                            this.updateProgress(percentage, `تم استخراج ${current} من ${total} صفحات...`);
+                            
+                            // Update results display in real-time
+                            this.showResults();
+                            this.displayStreamingResults();
+                            
+                            break;
+                            
+                        case 'complete':
+                            this.eventSource.close();
+                            this.updateProgress(100, data.message);
+                            this.showNotification(`تم الانتهاء! تم استخراج ${data.total_pages} صفحة`, 'success');
+                            
+                            // Final results display
+                            this.showResults();
+                            this.displayResults(this.results);
+                            
+                            break;
+                            
+                        case 'error':
+                            this.eventSource.close();
+                            throw new Error(data.message);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing stream data:', parseError);
+                }
+            };
+            
+            this.eventSource.onerror = (error) => {
+                console.error('EventSource error:', error);
+                this.eventSource.close();
+                this.showNotification('خطأ في البث المباشر', 'error');
+            };
+            
+        } catch (error) {
+            this.showNotification(error.message || 'خطأ في بدء البث المباشر', 'error');
+            console.error('Streaming error:', error);
+        } finally {
+            submitBtn.classList.remove('loading');
+        }
+    }
+    
+    displayStreamingResults() {
+        // Update the results display with current results
+        const resultsGrid = document.getElementById('resultsGrid');
+        if (!resultsGrid) return;
+        
+        // Clear and rebuild results to show latest data
+        resultsGrid.innerHTML = '';
+        
+        this.results.forEach((result, index) => {
+            const resultCard = this.createResultCard(result.data, index);
+            resultsGrid.appendChild(resultCard);
+        });
+        
+        // Update results count and header
+        this.updateResultsHeader();
+    }
+    
+    updateResultsHeader() {
+        const resultsHeader = document.querySelector('#resultsSection h2');
+        if (resultsHeader && this.results.length > 0) {
+            resultsHeader.textContent = `📊 النتائج المستخرجة (${this.results.length} صفحة)`;
+        }
     }
     
     showResults() {
