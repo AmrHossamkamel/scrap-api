@@ -556,6 +556,14 @@ class WebScrapingUI {
             // Create new EventSource for streaming
             this.eventSource = new EventSource(streamUrl);
             
+            // Set up proper event listeners
+            this.eventSource.addEventListener('error', (error) => {
+                console.error('EventSource failed:', error);
+                this.eventSource.close();
+                this.showNotification('خطأ في الاتصال بالبث المباشر', 'error');
+                submitBtn.classList.remove('loading');
+            });
+            
             // Handle streaming events
             this.eventSource.onmessage = (event) => {
                 try {

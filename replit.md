@@ -8,6 +8,17 @@ This project is a FastAPI-based web scraping service that crawls websites and ex
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### August 11, 2025
+- Successfully migrated project from Replit Agent to Replit environment
+- Fixed uvicorn dependency issue and FastAPI server configuration
+- Added real-time streaming functionality using Server-Sent Events (SSE)
+- Implemented /scrape-stream endpoint for live result updates
+- Enhanced frontend with streaming support and real-time progress display
+- Fixed EventSource method compatibility (GET instead of POST)
+- User requested live streaming of scraping results instead of waiting for completion
+
 ## System Architecture
 
 ### Backend Architecture

@@ -544,7 +544,7 @@ async def scrape_website(
         logger.error(f"Error during scraping: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@app.post("/scrape-stream", tags=["Web Scraping"])
+@app.get("/scrape-stream", tags=["Web Scraping"])
 async def scrape_website_stream(
     url: str = Query(
         ..., 
