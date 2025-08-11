@@ -310,7 +310,7 @@ class WebScrapingUI {
                 
                 data = await response.json();
             } else if (mode === 'stream') {
-                // Real-time streaming scraping
+                // Real-time streaming scraping with same duplicate prevention
                 await this.startStreamingScraping(url, maxPages, timeout);
                 return; // Exit early as streaming handles everything
             } else {

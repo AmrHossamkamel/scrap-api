@@ -18,6 +18,8 @@ Preferred communication style: Simple, everyday language.
 - Enhanced frontend with streaming support and real-time progress display
 - Fixed EventSource method compatibility (GET instead of POST)
 - User requested live streaming of scraping results instead of waiting for completion
+- User feedback: Keep same deduplication system but show pages as they complete
+- Maintained existing duplicate prevention while adding real-time display
 
 ## System Architecture
 

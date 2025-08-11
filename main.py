@@ -687,8 +687,8 @@ async def scrape_website_stream(
                     except Exception as e:
                         logger.error(f"Error extracting links from {current_url}: {e}")
                 
-                # Small delay to prevent overwhelming the client
-                await asyncio.sleep(0.1)
+                # Small delay to prevent overwhelming the client and reduce duplicate processing
+                await asyncio.sleep(0.2)
             
             # Send completion event
             complete_event = {
