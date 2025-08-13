@@ -197,44 +197,20 @@ class WebScraper:
                 if h1_tag:
                     title = h1_tag.get_text().strip()
             
-            # Remove script and style elements
-            for script in soup(["script", "style", "nav", "header", "footer", "aside"]):
+            # Remove only script and style elements, keep everything else for complete content
+            for script in soup(["script", "style"]):
                 script.decompose()
             
-            # Extract main content with better selectors for WordPress and modern sites
+            # Extract complete page content from body or entire document
             content = ""
             
-            # Try multiple content selectors for better extraction
-            content_selectors = [
-                'main', 'article', '.post-content', '.entry-content', '.content',
-                '.elementor-widget-container', '.elementor-text-editor',
-                '.post-body', '.article-content', '.page-content',
-                '[role="main"]', '.main-content', '#content'
-            ]
-            
-            main_content = None
-            for selector in content_selectors:
-                elements = soup.select(selector)
-                if elements:
-                    # Find the element with the most text content
-                    best_element = max(elements, key=lambda x: len(x.get_text()))
-                    if len(best_element.get_text().strip()) > len(content):
-                        main_content = best_element
-                        content = best_element.get_text(separator=' ', strip=True)
-            
-            # If still no good content, try paragraph-based extraction
-            if len(content.strip()) < 100:
-                paragraphs = soup.find_all('p')
-                if paragraphs:
-                    content = ' '.join([p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
-            
-            # Final fallback to body content
-            if len(content.strip()) < 50:
-                body = soup.find('body')
-                if body:
-                    content = body.get_text(separator=' ', strip=True)
-                else:
-                    content = soup.get_text(separator=' ', strip=True)
+            # Get the body element for complete content extraction
+            body = soup.find('body')
+            if body:
+                content = body.get_text(separator=' ', strip=True)
+            else:
+                # If no body tag, extract from entire document
+                content = soup.get_text(separator=' ', strip=True)
             
             # Clean up content - remove extra whitespace
             content = ' '.join(content.split())
