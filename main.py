@@ -628,14 +628,14 @@ async def scrape_website(
         logger.error(f"Error during scraping: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@app.get("/scrape-stream", 
+@app.post("/scrape-stream", 
         tags=["📡 Real-time Streaming"], 
         summary="Stream scraped pages in real-time",
         description="""
 ## Real-time Streaming Web Scraper
 
-Stream scraped pages in real-time using Server-Sent Events (SSE).
-Each page is sent immediately after being processed, providing live results.
+Stream scraped pages in real-time with immediate results.
+Each page is sent as soon as it's processed, providing live updates.
 
 ### Features:
 - **📡 Real-time Streaming**: Results appear as soon as each page is scraped
@@ -646,18 +646,27 @@ Each page is sent immediately after being processed, providing live results.
 
 ### Usage:
 Perfect for interactive applications where users want to see results immediately.
-Use EventSource in JavaScript for real-time updates.
+Returns streaming JSON responses with real-time updates.
 
-### Parameters:
-- **url**: Website URL to scrape
-- **max_pages**: Maximum number of pages to scrape (1-500)
-- **timeout**: Request timeout in seconds (5-60)
+### Request Body:
+```json
+{
+    "url": "https://example.com",
+    "max_pages": 50,
+    "timeout": 10
+}
+```
         """)
-async def scrape_website_stream(
-    url: str = Query(..., description="Website URL to scrape", example="https://example.com"),
-    max_pages: int = Query(50, description="Maximum number of pages to scrape", ge=1, le=500),
-    timeout: int = Query(10, description="Request timeout in seconds", ge=5, le=60)
-):
+async def scrape_website_stream(request: dict):
+    
+    # Extract parameters from request
+    url = request.get('url')
+    max_pages = request.get('max_pages', 50)
+    timeout = request.get('timeout', 10)
+    
+    # Validate parameters
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
     
     # Validate URL
     try:
@@ -792,14 +801,14 @@ async def scrape_website_stream(
         }
     )
 
-@app.get("/scrape-stream-unlimited", 
+@app.post("/scrape-stream-unlimited", 
         tags=["🚀 Unlimited Streaming"], 
         summary="Stream unlimited website scraping",
         description="""
 ## Unlimited Website Scraper with Real-time Streaming
 
 This endpoint scrapes entire websites without page limits. 
-Results are streamed in real-time using Server-Sent Events (SSE).
+Results are streamed in real-time with immediate updates.
 
 ### Features:
 - **🌐 Complete Coverage**: Continues until all discoverable pages are scraped
@@ -813,15 +822,25 @@ Results are streamed in real-time using Server-Sent Events (SSE).
 
 ### Usage:
 Perfect for websites where you need comprehensive content extraction.
+Returns streaming JSON responses with real-time updates.
 
-### Parameters:
-- **url**: Website URL to scrape
-- **timeout**: Request timeout in seconds (5-60)
+### Request Body:
+```json
+{
+    "url": "https://example.com",
+    "timeout": 10
+}
+```
         """)
-async def scrape_stream_unlimited(
-    url: str = Query(..., description="Website URL to scrape", example="https://example.com"),
-    timeout: int = Query(10, description="Request timeout in seconds", ge=5, le=60)
-):
+async def scrape_stream_unlimited(request: dict):
+    
+    # Extract parameters from request
+    url = request.get('url')
+    timeout = request.get('timeout', 10)
+    
+    # Validate parameters
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
     
     # Validate URL
     try:

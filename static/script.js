@@ -531,78 +531,92 @@ class WebScrapingUI {
             progressSection.style.display = 'block';
             progressSection.scrollIntoView({ behavior: 'smooth' });
             
-            // Prepare streaming URL
-            const streamUrl = `${this.apiBaseUrl}/scrape-stream?url=${encodeURIComponent(url)}&max_pages=${maxPages}&timeout=${timeout}`;
+            // Prepare streaming request
+            const streamUrl = `${this.apiBaseUrl}/scrape-stream`;
+            const requestBody = {
+                url: url,
+                max_pages: maxPages,
+                timeout: timeout
+            };
             
-            // Close any existing EventSource
-            if (this.eventSource) {
-                this.eventSource.close();
-            }
-            
-            // Create new EventSource for streaming
-            this.eventSource = new EventSource(streamUrl);
-            
-            // Set up proper event listeners
-            this.eventSource.addEventListener('error', (error) => {
-                console.error('EventSource failed:', error);
-                this.eventSource.close();
-                this.showNotification('خطأ في الاتصال بالبث المباشر', 'error');
-                submitBtn.classList.remove('loading');
+            // Start streaming with fetch and response.body.getReader()
+            const response = await fetch(streamUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
             });
             
-            // Handle streaming events
-            this.eventSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    switch (data.type) {
-                        case 'start':
-                            this.updateProgress(0, data.message);
-                            this.showNotification('بدء البث المباشر للنتائج', 'info');
-                            break;
-                            
-                        case 'page':
-                            // Add new page to results immediately
-                            this.results.push({ data: data.data });
-                            
-                            // Update progress
-                            const percentage = data.progress ? data.progress.percentage : 0;
-                            const current = data.progress ? data.progress.current : this.results.length;
-                            const total = data.progress ? data.progress.total : maxPages;
-                            
-                            this.updateProgress(percentage, `تم استخراج ${current} من ${total} صفحات...`);
-                            
-                            // Update results display in real-time
-                            this.showResults();
-                            this.displayStreamingResults();
-                            
-                            break;
-                            
-                        case 'complete':
-                            this.eventSource.close();
-                            this.updateProgress(100, data.message);
-                            this.showNotification(`تم الانتهاء! تم استخراج ${data.total_pages} صفحة`, 'success');
-                            
-                            // Final results display
-                            this.showResults();
-                            this.displayResults(this.results);
-                            
-                            break;
-                            
-                        case 'error':
-                            this.eventSource.close();
-                            throw new Error(data.message);
-                    }
-                } catch (parseError) {
-                    console.error('Error parsing stream data:', parseError);
-                }
-            };
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
-            this.eventSource.onerror = (error) => {
-                console.error('EventSource error:', error);
-                this.eventSource.close();
-                this.showNotification('خطأ في البث المباشر', 'error');
-            };
+            // Process streaming response
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) break;
+                
+                // Decode the chunk and add to buffer
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete lines from buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                    if (line.trim() && line.startsWith('data: ')) {
+                        try {
+                            const jsonStr = line.substring(6); // Remove "data: " prefix
+                            const data = JSON.parse(jsonStr);
+                            
+                            switch (data.type) {
+                                case 'start':
+                                    this.updateProgress(0, data.message);
+                                    this.showNotification('بدء البث المباشر للنتائج', 'info');
+                                    break;
+                                    
+                                case 'page':
+                                    // Add new page to results immediately
+                                    this.results.push({ data: data.data });
+                                    
+                                    // Update progress
+                                    const percentage = data.progress ? data.progress.percentage : 0;
+                                    const current = data.progress ? data.progress.current : this.results.length;
+                                    const total = data.progress ? data.progress.total : maxPages;
+                                    
+                                    this.updateProgress(percentage, `تم استخراج ${current} من ${total} صفحات...`);
+                                    
+                                    // Update results display in real-time
+                                    this.showResults();
+                                    this.displayStreamingResults();
+                                    
+                                    break;
+                                    
+                                case 'complete':
+                                    this.updateProgress(100, data.message);
+                                    this.showNotification(`تم الانتهاء! تم استخراج ${data.total_pages} صفحة`, 'success');
+                                    
+                                    // Final results display
+                                    this.showResults();
+                                    this.displayResults(this.results);
+                                    
+                                    return; // Exit the function
+                                    
+                                case 'error':
+                                    throw new Error(data.message);
+                            }
+                        } catch (parseError) {
+                            console.error('Error parsing stream data:', parseError);
+                        }
+                    }
+                }
+            }
             
         } catch (error) {
             this.showNotification(error.message || 'خطأ في بدء البث المباشر', 'error');
@@ -664,87 +678,100 @@ class WebScrapingUI {
             progressSection.style.display = 'block';
             progressSection.scrollIntoView({ behavior: 'smooth' });
             
-            // Prepare unlimited streaming URL
-            const streamUrl = `${this.apiBaseUrl}/scrape-stream-unlimited?url=${encodeURIComponent(url)}&timeout=${timeout}`;
+            // Prepare unlimited streaming request
+            const streamUrl = `${this.apiBaseUrl}/scrape-stream-unlimited`;
+            const requestBody = {
+                url: url,
+                timeout: timeout
+            };
             
-            // Close any existing EventSource
-            if (this.eventSource) {
-                this.eventSource.close();
-            }
-            
-            // Create new EventSource for unlimited streaming
-            this.eventSource = new EventSource(streamUrl);
-            
-            // Set up proper event listeners
-            this.eventSource.addEventListener('error', (error) => {
-                console.error('Unlimited EventSource failed:', error);
-                this.eventSource.close();
-                this.showNotification('خطأ في الاتصال بالبث المباشر الشامل', 'error');
-                submitBtn.classList.remove('loading');
+            // Start streaming with fetch and response.body.getReader()
+            const response = await fetch(streamUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
             });
             
-            // Handle unlimited streaming events
-            this.eventSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    switch (data.type) {
-                        case 'start':
-                            this.updateProgress(0, data.message);
-                            this.showNotification('بدء البث المباشر الشامل للموقع', 'info');
-                            break;
-                            
-                        case 'page':
-                            // Add new page to results immediately
-                            this.results.push({ data: data.data });
-                            
-                            // Update progress for unlimited mode
-                            const current = data.progress ? data.progress.current : this.results.length;
-                            const queueSize = data.progress ? data.progress.queue_size : 0;
-                            
-                            this.updateProgress(null, `تم استخراج ${current} صفحة... (${queueSize} في الانتظار)`);
-                            
-                            // Update results display in real-time
-                            this.showResults();
-                            this.displayStreamingResults();
-                            
-                            break;
-                            
-                        case 'warning':
-                            this.showNotification(data.message, 'warning');
-                            break;
-                            
-                        case 'progress':
-                            // Update progress for milestone notifications
-                            const currentCount = data.current || this.results.length;
-                            this.updateProgress(null, data.message);
-                            break;
-                            
-                        case 'complete':
-                            this.eventSource.close();
-                            this.updateProgress(100, data.message);
-                            this.showNotification(`تم الانتهاء من السكرابنج الشامل! تم استخراج ${data.total_pages} صفحة`, 'success');
-                            
-                            // Final results display
-                            this.showResults();
-                            this.displayResults(this.results);
-                            
-                            break;
-                            
-                        case 'error':
-                            this.eventSource.close();
-                            throw new Error(data.message);
-                    }
-                } catch (parseError) {
-                    console.error('Error parsing unlimited stream data:', parseError);
-                }
-            };
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
-            this.eventSource.onerror = (error) => {
-                console.error('Unlimited EventSource error:', error);
-                this.eventSource.close();
-                this.showNotification('خطأ في البث المباشر الشامل', 'error');
-            };
+            // Process streaming response
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) break;
+                
+                // Decode the chunk and add to buffer
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete lines from buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                    if (line.trim() && line.startsWith('data: ')) {
+                        try {
+                            const jsonStr = line.substring(6); // Remove "data: " prefix
+                            const data = JSON.parse(jsonStr);
+                            
+                            switch (data.type) {
+                                case 'start':
+                                    this.updateProgress(0, data.message);
+                                    this.showNotification('بدء البث المباشر الشامل للموقع', 'info');
+                                    break;
+                                    
+                                case 'page':
+                                    // Add new page to results immediately
+                                    this.results.push({ data: data.data });
+                                    
+                                    // Update progress for unlimited mode
+                                    const current = data.progress ? data.progress.current : this.results.length;
+                                    const queueSize = data.progress ? data.progress.queue_size : 0;
+                                    
+                                    this.updateProgress(null, `تم استخراج ${current} صفحة... (${queueSize} في الانتظار)`);
+                                    
+                                    // Update results display in real-time
+                                    this.showResults();
+                                    this.displayStreamingResults();
+                                    
+                                    break;
+                                    
+                                case 'warning':
+                                    this.showNotification(data.message, 'warning');
+                                    break;
+                                    
+                                case 'progress':
+                                    // Update progress for milestone notifications
+                                    const currentCount = data.current || this.results.length;
+                                    this.updateProgress(null, data.message);
+                                    break;
+                                    
+                                case 'complete':
+                                    this.updateProgress(100, data.message);
+                                    this.showNotification(`تم الانتهاء من السكرابنج الشامل! تم استخراج ${data.total_pages} صفحة`, 'success');
+                                    
+                                    // Final results display
+                                    this.showResults();
+                                    this.displayResults(this.results);
+                                    
+                                    return; // Exit the function
+                                    
+                                case 'error':
+                                    throw new Error(data.message);
+                            }
+                        } catch (parseError) {
+                            console.error('Error parsing unlimited stream data:', parseError);
+                        }
+                    }
+                }
+            }
             
         } catch (error) {
             this.showNotification(error.message || 'خطأ في بدء البث المباشر الشامل', 'error');

@@ -15,10 +15,11 @@ Preferred communication style: Simple, everyday language.
 - Fixed uvicorn dependency and import issues for seamless operation
 - Enhanced Swagger documentation for all endpoints with professional English descriptions
 - Renamed main scrape endpoint from `/scrape` to `/scrape-pages` for better clarity
-- Improved streaming endpoint documentation with clear feature descriptions
+- Converted streaming endpoints from GET to POST method per user request
+- Updated JavaScript to use fetch with streaming readers instead of EventSource for POST compatibility
+- Improved streaming endpoint documentation with clear request body examples
 - Fixed JavaScript duplicate handling for unlimited streaming mode
-- Maintained GET method for streaming endpoints (required for EventSource/SSE compatibility)
-- Verified all endpoints working including unlimited streaming functionality
+- All streaming endpoints now use POST method with JSON request bodies
 - All security features and duplicate detection systems working properly
 
 ### August 11, 2025
