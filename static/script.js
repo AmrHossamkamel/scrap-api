@@ -292,30 +292,12 @@ class WebScrapingUI {
                 const singleData = await response.json();
                 data = [singleData]; // Convert to array format
             } else if (mode === 'unlimited') {
-                // Unlimited scraping - use dedicated endpoint
-                this.simulateUnlimitedProgress();
-                requestUrl = `${this.apiBaseUrl}/scrape-all?url=${encodeURIComponent(url)}&timeout=${timeout}`;
-                
-                const response = await fetch(requestUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'خطأ في معالجة الطلب');
-                }
-                
-                data = await response.json();
+                // Unlimited streaming scraping
+                await this.startUnlimitedStreamingScraping(url, timeout);
+                return; // Exit early as streaming handles everything
             } else if (mode === 'stream') {
                 // Real-time streaming scraping with same duplicate prevention
                 await this.startStreamingScraping(url, maxPages, timeout);
-                return; // Exit early as streaming handles everything
-            } else if (mode === 'unlimited') {
-                // Unlimited streaming scraping
-                await this.startUnlimitedStreamingScraping(url, timeout);
                 return; // Exit early as streaming handles everything
             } else {
                 // Limited scraping
