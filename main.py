@@ -540,7 +540,7 @@ async def scrape_all_pages(
         logger.error(f"Error during unlimited scraping: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@app.post("/scrape", response_model=List[ScrapedPage], tags=["Web Scraping"])
+@app.post("/scrape-pages", response_model=List[ScrapedPage], tags=["Web Scraping"])
 async def scrape_website(
     url: str = Query(
         ..., 
@@ -629,30 +629,34 @@ async def scrape_website(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/scrape-stream", 
-        tags=["📡 Streaming Scraping"], 
-        summary="📡 استخراج مع بث مباشر للنتائج",
+        tags=["📡 Real-time Streaming"], 
+        summary="Stream scraped pages in real-time",
         description="""
-## 📡 استخراج مع بث مباشر للنتائج
+## Real-time Streaming Web Scraper
 
-### الوصف:
-يقوم هذا endpoint باستخراج عدد محدود من الصفحات مع عرض النتائج فور معالجة كل صفحة
-باستخدام Server-Sent Events (SSE).
+Stream scraped pages in real-time using Server-Sent Events (SSE).
+Each page is sent immediately after being processed, providing live results.
 
-### المميزات:
-- 📡 **بث مباشر**: النتائج تظهر فور معالجة كل صفحة
-- 🚀 **بدون انتظار**: شاهد النتائج فوراً بدلاً من انتظار الانتهاء
-- 📊 **تتبع مباشر**: تابع تقدم العملية لحظة بلحظة
-- 🛡️ **نفس الحماية**: جميع ميزات الأمان للاستخراج العادي
-- 🎯 **عدد محدود**: تحكم في عدد الصفحات المستخرجة
+### Features:
+- **📡 Real-time Streaming**: Results appear as soon as each page is scraped
+- **🚀 No Waiting**: See pages immediately instead of waiting for completion  
+- **📊 Live Progress**: Track scraping progress in real-time
+- **🛡️ Same Security**: All security features of regular scraping
+- **🎯 Limited Pages**: Control the number of pages to extract
 
-### الاستخدام:
-مثالي للتطبيقات التفاعلية التي تحتاج عرض النتائج فوراً.
-استخدم EventSource في JavaScript للحصول على التحديثات المباشرة.
+### Usage:
+Perfect for interactive applications where users want to see results immediately.
+Use EventSource in JavaScript for real-time updates.
+
+### Parameters:
+- **url**: Website URL to scrape
+- **max_pages**: Maximum number of pages to scrape (1-500)
+- **timeout**: Request timeout in seconds (5-60)
         """)
 async def scrape_website_stream(
-    url: str = Query(..., description="🌐 الرابط الأساسي للموقع المراد استخراجه", example="https://example.com"),
-    max_pages: int = Query(50, description="📄 العدد الأقصى للصفحات المراد استخراجها", ge=1, le=500, example=50),
-    timeout: int = Query(10, description="⏱️ مهلة الانتظار لكل طلب (ثواني)", ge=5, le=60, example=10)
+    url: str = Query(..., description="Website URL to scrape", example="https://example.com"),
+    max_pages: int = Query(50, description="Maximum number of pages to scrape", ge=1, le=500),
+    timeout: int = Query(10, description="Request timeout in seconds", ge=5, le=60)
 ):
     
     # Validate URL
@@ -789,31 +793,34 @@ async def scrape_website_stream(
     )
 
 @app.get("/scrape-stream-unlimited", 
-        tags=["🚀 Unlimited Scraping"], 
-        summary="🌐 استخراج شامل للموقع بالكامل",
+        tags=["🚀 Unlimited Streaming"], 
+        summary="Stream unlimited website scraping",
         description="""
-## 🚀 استخراج شامل للموقع بالكامل مع البث المباشر
+## Unlimited Website Scraper with Real-time Streaming
 
-### الوصف:
-هذا endpoint يقوم باستخراج جميع صفحات الموقع بدون أي حد أقصى. يعرض النتائج فور استخراجها 
-باستخدام Server-Sent Events (SSE) للحصول على تحديثات فورية.
+This endpoint scrapes entire websites without page limits. 
+Results are streamed in real-time using Server-Sent Events (SSE).
 
-### المميزات:
-- 🌐 **استخراج شامل**: يتابع حتى يستخرج جميع الصفحات المكتشفة
-- 📡 **بث مباشر**: النتائج تظهر فور معالجة كل صفحة  
-- 🛡️ **حماية متقدمة**: نظام ذكي لمنع التكرار والحلقات اللانهائية
-- ⚡ **أداء عالي**: استخدام HTTP sessions وتحسينات الشبكة
-- 🔍 **اكتشاف ذكي**: يتبع الروابط الداخلية تلقائياً
+### Features:
+- **🌐 Complete Coverage**: Continues until all discoverable pages are scraped
+- **📡 Real-time Stream**: Results appear as soon as each page is processed  
+- **🛡️ Advanced Protection**: Smart duplicate prevention and infinite loop protection
+- **⚡ High Performance**: Uses HTTP sessions and network optimizations
+- **🔍 Smart Discovery**: Automatically follows internal links
 
-### تحذير:
-⚠️ **انتبه**: قد يستغرق وقتاً طويلاً للمواقع الكبيرة ويستهلك موارد كثيرة
+### Warning:
+⚠️ **Caution**: May take a very long time for large websites and consume significant resources
 
-### طريقة الاستخدام:
-مثالي للمواقع التي تحتاج استخراج شامل لكل المحتوى المتاح.
+### Usage:
+Perfect for websites where you need comprehensive content extraction.
+
+### Parameters:
+- **url**: Website URL to scrape
+- **timeout**: Request timeout in seconds (5-60)
         """)
 async def scrape_stream_unlimited(
-    url: str = Query(..., description="🌐 الرابط الأساسي للموقع المراد استخراجه", example="https://example.com"),
-    timeout: int = Query(10, description="⏱️ مهلة الانتظار لكل طلب (ثواني)", ge=5, le=60)
+    url: str = Query(..., description="Website URL to scrape", example="https://example.com"),
+    timeout: int = Query(10, description="Request timeout in seconds", ge=5, le=60)
 ):
     
     # Validate URL

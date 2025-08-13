@@ -302,7 +302,7 @@ class WebScrapingUI {
             } else {
                 // Limited scraping
                 this.simulateProgress(maxPages);
-                requestUrl = `${this.apiBaseUrl}/scrape?url=${encodeURIComponent(url)}&max_pages=${maxPages}&timeout=${timeout}`;
+                requestUrl = `${this.apiBaseUrl}/scrape-pages?url=${encodeURIComponent(url)}&max_pages=${maxPages}&timeout=${timeout}`;
                 
                 const response = await fetch(requestUrl, {
                     method: 'POST',
