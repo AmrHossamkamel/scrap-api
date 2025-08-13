@@ -146,45 +146,9 @@ class WebScraper:
         return normalized in self.visited_urls
     
     def extract_content(self, html_content: str, url: str) -> Dict[str, Any]:
-        """Extract title and content from HTML using advanced extraction methods"""
+        """Extract title and content from HTML using comprehensive BeautifulSoup method"""
         try:
-            # First, try using trafilatura for better content extraction
-            extracted_content = trafilatura.extract(html_content, include_comments=False, include_tables=True)
-            extracted_title = trafilatura.extract_metadata(html_content)
-            
-            # Use trafilatura results if available
-            if extracted_content and len(extracted_content.strip()) > 50:
-                title = ""
-                if extracted_title and extracted_title.title:
-                    title = extracted_title.title.strip()
-                
-                # If no title from trafilatura, try BeautifulSoup
-                if not title:
-                    soup = BeautifulSoup(html_content, 'html.parser')
-                    title_tag = soup.find('title')
-                    if title_tag:
-                        title = title_tag.get_text().strip()
-                    else:
-                        h1_tag = soup.find('h1')
-                        if h1_tag:
-                            title = h1_tag.get_text().strip()
-                
-                # Clean up content
-                content = ' '.join(extracted_content.split())
-                
-                # Generate unique ID and timestamp
-                page_id = str(uuid.uuid4())
-                created_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-                
-                return {
-                    "created_at": created_at,
-                    "id": page_id,
-                    "source_url": url,
-                    "title": title,
-                    "content": content
-                }
-            
-            # Fallback to BeautifulSoup method if trafilatura doesn't work well
+            # Use BeautifulSoup for complete content extraction
             soup = BeautifulSoup(html_content, 'html.parser')
             
             # Extract title
@@ -201,15 +165,12 @@ class WebScraper:
             for script in soup(["script", "style"]):
                 script.decompose()
             
-            # Extract complete page content from body or entire document
-            content = ""
-            
-            # Get the body element for complete content extraction
+            # Extract complete page content using comprehensive method
+            # Use complete body text to ensure no content is missed
             body = soup.find('body')
             if body:
                 content = body.get_text(separator=' ', strip=True)
             else:
-                # If no body tag, extract from entire document
                 content = soup.get_text(separator=' ', strip=True)
             
             # Clean up content - remove extra whitespace
